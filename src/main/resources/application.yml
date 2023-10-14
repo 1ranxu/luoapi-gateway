@@ -1,0 +1,20 @@
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: api_route
+          uri: http://localhost:8002
+          predicates:
+            - Path=/api/**
+      default-filters:
+        - AddRequestHeader=username,ranxu
+
+logging:
+  level:
+    org:
+      springframework:
+        cloud:
+          gateway: trace
+server:
+  port: 8012
