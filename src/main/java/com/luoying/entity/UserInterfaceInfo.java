@@ -24,17 +24,12 @@ public class UserInterfaceInfo implements Serializable {
     private Long interfaceInfoId;
 
     /**
-     * 已调用次数
+     * 总调用次数
      */
-    private Long invokedNum;
+    private Long totalInvokes;
 
     /**
-     * 剩余调用次数
-     */
-    private Long leftNum;
-
-    /**
-     * 用户状态 0-限制 1-正常
+     * 调用状态 0-限制 1-正常
      */
     private Integer status;
 

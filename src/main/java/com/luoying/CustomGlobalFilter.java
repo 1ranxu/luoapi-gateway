@@ -1,6 +1,7 @@
 package com.luoying;
 
 
+import com.alibaba.nacos.common.utils.StringUtils;
 import com.luoying.entity.InterfaceInfo;
 import com.luoying.entity.User;
 import com.luoying.provider.CommonService;
@@ -30,35 +31,34 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
+
 /**
  * 全局过滤
  */
 @Slf4j
 @Component
 public class CustomGlobalFilter implements GlobalFilter, Ordered {
-    private static final List<String> IP_WHITE_LIST = Arrays.asList("127.0.0.1");
+    private static final List<String> IP_BLACK_LIST = Arrays.asList("10.10.10.10");
+    private static final String GATEWAY_HOST = "http://localhost:8012";
 
     @DubboReference
     private CommonService commonService;
-
-    private static final String INTERFACE_DOMAIN = "http://localhost:8082";
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         // 1. 记录请求日志
         ServerHttpRequest request = exchange.getRequest();
-        String sourceAddress = request.getLocalAddress().getHostString();
-        String path = request.getPath().value();
         String method = request.getMethod().toString();
+        String path = request.getPath().value();
         log.info("请求唯一标识：{}", request.getId());
         log.info("请求路径：{}", path);
         log.info("请求方法：{}", method);
         log.info("请求参数：{}", request.getQueryParams());
         log.info("请求地址来源：{}", request.getRemoteAddress());
-        log.info("请求地址来源：{}", sourceAddress);
-        // 2. 黑白名单
+        log.info("网关本地地址：{}", request.getLocalAddress());
+        // 2. 黑名单
         ServerHttpResponse response = exchange.getResponse();
-        if (!IP_WHITE_LIST.contains(sourceAddress)) {
+        if (IP_BLACK_LIST.contains(request.getRemoteAddress().getHostString())) {
             response.setStatusCode(HttpStatus.FORBIDDEN);
             return response.setComplete();
         }
@@ -68,8 +68,17 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         String sign = headers.getFirst("sign");
         String body = headers.getFirst("body");
         String timestamp = headers.getFirst("timestamp");
-        Date timestamp1 = new Date(Long.valueOf(timestamp).longValue());
-        //根据accessKey查询数据库，是否存在包含该accessKey的用户
+        // 请求头参数必须都携带
+        if (StringUtils.isAnyBlank(body, sign, accessKey, timestamp)) {
+            return handleNoAuth(response);
+        }
+        // 过期时间不能在当前时间之前 或者 过期时间减当前时间不能超过一分钟
+        Date expireTime = new Date(Long.parseLong(timestamp));
+        Date currentTime = new Date();
+        if (expireTime.before(currentTime) || (expireTime.getTime() - currentTime.getTime()) / 1000 > 60) {
+            return handleNoAuth(response);
+        }
+        // 根据accessKey查询数据库，是否存在包含该accessKey的用户
         User invokeUser = null;
         try {
             invokeUser = commonService.getInvokeUser(accessKey);
@@ -77,12 +86,11 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
             log.error("getInvokeUser error", e);
             return handleNoAuth(response);
         }
-
-        //过期时间不能在当前时间之前
-        if (timestamp1.before(new Date())) {
+        // 用户角色不能是被ban用户
+        if (invokeUser.getUserRole().equals("ban")) {
             return handleNoAuth(response);
         }
-        //根据记录获取secretKey
+        // 根据记录获取secretKey
         String secretKey = invokeUser.getSecretKey();
         String dbSign = SignUtil.genSign(body, secretKey);
         if (!dbSign.equals(sign)) {
@@ -91,15 +99,18 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         // 4. 请求的模拟接口是否存在
         InterfaceInfo invokeInterfaceInfo = null;
         try {
-            invokeInterfaceInfo = commonService.getInvokeInterfaceInfo(method, INTERFACE_DOMAIN + path);
+            invokeInterfaceInfo = commonService.getInvokeInterfaceInfo(method, GATEWAY_HOST + path);
         } catch (Exception e) {
             log.error("getInvokeInterfaceInfo error", e);
             return handlInvokeError(response);
         }
-        Long interfaceInfoId = invokeInterfaceInfo.getId();
         Long userId = invokeUser.getId();
+        // 用户剩余积分不能小于接口扣减积分
+        if (invokeUser.getScore() < invokeInterfaceInfo.getReduceScore()) {
+            return handleNoAuth(response);
+        }
         // 5. 请求转发，调用模拟接口
-        return responseLog(exchange, chain, interfaceInfoId, userId);
+        return responseLog(exchange, chain, userId, invokeInterfaceInfo);
     }
 
     @Override
@@ -117,7 +128,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         return response.setComplete();
     }
 
-    public Mono<Void> responseLog(ServerWebExchange exchange, GatewayFilterChain chain, long interfaceInfoId, long userId) {
+    public Mono<Void> responseLog(ServerWebExchange exchange, GatewayFilterChain chain, long userId, InterfaceInfo interfaceInfo) {
         try {
             ServerHttpResponse originalResponse = exchange.getResponse();
             // 缓冲区工厂缓存数据
@@ -136,13 +147,13 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                             Flux<? extends DataBuffer> fluxBody = Flux.from(body);
                             // 等模拟接口调用完成后，才会执行
                             return super.writeWith(fluxBody.map(dataBuffer -> {
-                                // 6. 调用成功，接口调用次数加一
+                                // 6. 调用成功，扣减积分
                                 try {
-                                    commonService.invokeCount(interfaceInfoId, userId);
+                                    commonService.invokeCount(userId, interfaceInfo.getId(), interfaceInfo.getReduceScore());
                                 } catch (Exception e) {
-                                    log.error("invokeCount error",e);
+                                    log.error("invokeCount error", e);
                                 }
-                                //content就是模拟接口的返回值
+                                // content就是模拟接口的返回值
                                 byte[] content = new byte[dataBuffer.readableByteCount()];
                                 dataBuffer.read(content);
                                 DataBufferUtils.release(dataBuffer);//释放掉内存
@@ -151,7 +162,6 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                                 sb2.append("<--- {} {} \n");
                                 List<Object> rspArgs = new ArrayList<>();
                                 rspArgs.add(originalResponse.getStatusCode());
-                                //rspArgs.add(requestUrl);
                                 String data = new String(content, StandardCharsets.UTF_8);//data
                                 sb2.append(data);
                                 // 8. 记录响应日志
@@ -164,7 +174,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                         return super.writeWith(body);
                     }
                 };
-                //放行调用模拟接口并设置 response 对象为装饰后的，调用完模拟接口就会拼接字符串
+                // 放行调用模拟接口并设置 response 对象为装饰后的，调用完模拟接口就会拼接字符串
                 return chain.filter(exchange.mutate().response(decoratedResponse).build());
             }
             return chain.filter(exchange);//降级处理返回数据

@@ -29,12 +29,17 @@ public class User implements Serializable {
     private String userAvatar;
 
     /**
-     * 性别
+     * 邮箱
+     */
+    private String email;
+
+    /**
+     * 性别 0-男 1-女
      */
     private Integer gender;
 
     /**
-     * 用户角色: user, admin
+     * 用户角色：user/admin/ban
      */
     private String userRole;
 
@@ -42,6 +47,26 @@ public class User implements Serializable {
      * 密码
      */
     private String userPassword;
+
+    /**
+     * 用户简介
+     */
+    private String userProfile;
+
+    /**
+     * 密码
+     */
+    private String accessKey;
+
+    /**
+     * 密码
+     */
+    private String secretKey;
+
+    /**
+     * 积分余额,注册送30积分
+     */
+    private Long score;
 
     /**
      * 创建时间
@@ -52,16 +77,6 @@ public class User implements Serializable {
      * 更新时间
      */
     private Date updateTime;
-
-    /**
-     * accessKey
-     */
-    private String accessKey;
-
-    /**
-     * secretKey
-     */
-    private String secretKey;
 
     /**
      * 是否删除

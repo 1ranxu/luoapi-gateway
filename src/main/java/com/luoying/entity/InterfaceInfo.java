@@ -19,14 +19,39 @@ public class InterfaceInfo implements Serializable {
     private String name;
 
     /**
-     * 接口描述
-     */
-    private String description;
-
-    /**
      * 接口地址
      */
     private String url;
+
+    /**
+     * 创建人
+     */
+    private Long userId;
+
+    /**
+     * 请求方法
+     */
+    private String method;
+
+    /**
+     * 接口请求参数
+     */
+    private String requestParams;
+
+    /**
+     * 接口响应参数
+     */
+    private String responseParams;
+
+    /**
+     * 扣除积分数
+     */
+    private Long reduceScore;
+
+    /**
+     * 请求示例
+     */
+    private String requestExample;
 
     /**
      * 请求头
@@ -39,19 +64,29 @@ public class InterfaceInfo implements Serializable {
     private String responseHeader;
 
     /**
+     * 返回格式（JSON等）
+     */
+    private String returnFormat;
+
+    /**
+     * 接口描述
+     */
+    private String description;
+
+    /**
      * 接口状态 0-关闭 1-开启
      */
     private Integer status;
 
     /**
-     * 请求类型
+     * 接口总调用次数
      */
-    private String method;
+    private Integer totalInvokes;
 
     /**
-     * 创建人
+     * 接口头像
      */
-    private Long userId;
+    private String avatarUrl;
 
     /**
      * 创建时间
@@ -64,17 +99,9 @@ public class InterfaceInfo implements Serializable {
     private Date updateTime;
 
     /**
-     * 请求参数
-     * [
-     *     {"name":"username","type":"string"}
-     * ]
-     */
-    private String requestParams;
-
-    /**
      * 逻辑删除
      */
-    private Integer idDelete;
+    private Integer isDelete;
 
     private static final long serialVersionUID = 1L;
 }
