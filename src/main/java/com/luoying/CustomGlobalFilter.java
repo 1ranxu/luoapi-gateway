@@ -39,7 +39,7 @@ import java.util.List;
 @Component
 public class CustomGlobalFilter implements GlobalFilter, Ordered {
     private static final List<String> IP_BLACK_LIST = Arrays.asList("10.10.10.10");
-    private static final String GATEWAY_HOST = "http://localhost:8012";
+    private static final String GATEWAY_HOST = "http://gateway.luoapi.icu";
 
     @DubboReference
     private CommonService commonService;
@@ -56,7 +56,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         log.info("请求参数：{}", request.getQueryParams());
         log.info("请求地址来源：{}", request.getRemoteAddress());
         log.info("网关本地地址：{}", request.getLocalAddress());
-        // 2. 黑名单
+        // 2. 判断ip是否在黑名单中
         ServerHttpResponse response = exchange.getResponse();
         if (IP_BLACK_LIST.contains(request.getRemoteAddress().getHostString())) {
             response.setStatusCode(HttpStatus.FORBIDDEN);
@@ -109,7 +109,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         if (invokeUser.getScore() < invokeInterfaceInfo.getReduceScore()) {
             return handleNoAuth(response);
         }
-        // 5. 请求转发，调用模拟接口
+        // 5. 请求转发，调用接口
         return responseLog(exchange, chain, userId, invokeInterfaceInfo);
     }
 
