@@ -39,7 +39,9 @@ import java.util.List;
 @Component
 public class CustomGlobalFilter implements GlobalFilter, Ordered {
     private static final List<String> IP_BLACK_LIST = Arrays.asList("10.10.10.10");
+
     private static final String GATEWAY_HOST = "http://gateway.luoapi.icu";
+    // private static final String GATEWAY_HOST = "http://localhost:8012";
 
     @DubboReference
     private CommonService commonService;
